@@ -5,21 +5,19 @@ import com.jayway.jsonpath.JsonPath;
 import net.minidev.json.JSONArray;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.annotation.DirtiesContext.ClassMode;
+
 import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
-// @DirtiesContext(classMode = ClassMode.AFTER_EACH_TEST_METHOD)
-
 class CashCardApplicationTests {
     @Autowired
     TestRestTemplate restTemplate;
@@ -27,9 +25,8 @@ class CashCardApplicationTests {
     @Test
     void shouldReturnACashCardWhenDataIsSaved() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth("sarah1", "password")
+                .withBasicAuth("sarah1", "abc123")
                 .getForEntity("/cashcards/99", String.class);
-
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         DocumentContext documentContext = JsonPath.parse(response.getBody());
@@ -43,9 +40,8 @@ class CashCardApplicationTests {
     @Test
     void shouldNotReturnACashCardWithAnUnknownId() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth("sarah1", "password")
+                .withBasicAuth("sarah1", "abc123")
                 .getForEntity("/cashcards/1000", String.class);
-
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(response.getBody()).isBlank();
     }
@@ -53,15 +49,15 @@ class CashCardApplicationTests {
     @Test
     @DirtiesContext
     void shouldCreateANewCashCard() {
-        CashCard newCashCard = new CashCard(null, 250.00, "sarah1");
+        CashCard newCashCard = new CashCard(null, 250.00, null);
         ResponseEntity<Void> createResponse = restTemplate
-                .withBasicAuth("sarah1", "password")
+                .withBasicAuth("sarah1", "abc123")
                 .postForEntity("/cashcards", newCashCard, Void.class);
         assertThat(createResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
         URI locationOfNewCashCard = createResponse.getHeaders().getLocation();
         ResponseEntity<String> getResponse = restTemplate
-                .withBasicAuth("sarah1", "password")
+                .withBasicAuth("sarah1", "abc123")
                 .getForEntity(locationOfNewCashCard, String.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -76,7 +72,7 @@ class CashCardApplicationTests {
     @Test
     void shouldReturnAllCashCardsWhenListIsRequested() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth("sarah1", "password")
+                .withBasicAuth("sarah1", "abc123")
                 .getForEntity("/cashcards", String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -94,7 +90,7 @@ class CashCardApplicationTests {
     @Test
     void shouldReturnAPageOfCashCards() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth("sarah1", "password")
+                .withBasicAuth("sarah1", "abc123")
                 .getForEntity("/cashcards?page=0&size=1", String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -106,9 +102,8 @@ class CashCardApplicationTests {
     @Test
     void shouldReturnASortedPageOfCashCards() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth("sarah1", "password")
-                .getForEntity("/cashcards?page=0&size=1&sort=amount,desc",
-                        String.class);
+                .withBasicAuth("sarah1", "abc123")
+                .getForEntity("/cashcards?page=0&size=1&sort=amount,desc", String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         DocumentContext documentContext = JsonPath.parse(response.getBody());
@@ -122,7 +117,7 @@ class CashCardApplicationTests {
     @Test
     void shouldReturnASortedPageOfCashCardsWithNoParametersAndUseDefaultValues() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth("sarah1", "password")
+                .withBasicAuth("sarah1", "abc123")
                 .getForEntity("/cashcards", String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -145,5 +140,21 @@ class CashCardApplicationTests {
                 .withBasicAuth("sarah1", "BAD-PASSWORD")
                 .getForEntity("/cashcards/99", String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void shouldRejectUsersWhoAreNotCardOwners() {
+        ResponseEntity<String> response = restTemplate
+                .withBasicAuth("hank-owns-no-cards", "qrs456")
+                .getForEntity("/cashcards/99", String.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void shouldNotAllowAccessToCashCardsTheyDoNotOwn() {
+        ResponseEntity<String> response = restTemplate
+                .withBasicAuth("sarah1", "abc123")
+                .getForEntity("/cashcards/102", String.class); // kumar2's data
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 }
